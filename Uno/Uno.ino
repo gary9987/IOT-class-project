@@ -48,25 +48,34 @@ void setup()
     // Connect to WPA/WPA2 network
     status = WiFi.begin(ssid, pass);
   }
-
+  
   // you're connected now, so print out the data
   Serial.println("You're connected to the network");
-  
   printWifiStatus();
 
-  Serial.println();
-  Serial.println("Starting connection to server...");
-
-  String re1 = http_get("httpbin.org", "/get", 80);
-  Serial.println("GARY\n" + re1);
-  //String re = http_post("httpbin.org", "/post", 80, "{\"JSON_key\": " + String(80) + "}");
+  //String re1 = http_get("httpbin.org", "/get", 80);
+  //Serial.println(re1);
+  String re = http_post("httpbin.org", "/post", "{\"JSON_key\": 22}");
   //Serial.println(re);
 
 }
 
 void loop()
 {
+  while (client.available()) {
+    char c = client.read();
+    Serial.write(c);
+  }
 
+  // if the server's disconnected, stop the client
+  if (!client.connected()) {
+    Serial.println();
+    Serial.println("Disconnecting from server...");
+    client.stop();
+
+    // do nothing forevermore
+    while (true);
+  }
 }
 
 
@@ -87,25 +96,27 @@ void printWifiStatus()
   Serial.print(rssi);
   Serial.println(" dBm");
 }
-String http_post(String server, String api,int port, const String &content){
-   WiFiEspClient client;
-   if (client.connect(server.c_str(), 80)) {
+String http_post(String server, String api, const String &content){
+  client.stop();
+  int value = 2.5;  // an arbitrary value for testing
+  String d = "{\"JSON_key\": " + String(value) + "}";
+  if (client.connect("httpbin.org", 80)) {
     Serial.println("Connected to server");
-    // Make a HTTP request
-    
-    client.println("POST " + api + " HTTP/1.1");
-    client.println("Host: " + server/* + ":" + String(port)*/);
+    client.println("POST /post HTTP/1.1");
+    client.println("Host: httpbin.org");
     client.println("Accept: */*");
-    client.println("Content-Length: " + String(content.length()));
-    client.println("Content-Type: application/json");
+    //client.println("Content-Length: " + d.length());
+    client.println("Content-Type: application/x-www-form-urlencoded");
     client.println();
-    client.println(content);
+    //client.println(d);
   }
-  String re = "";
+  
+  //char buf[buffer_size] = "";
+  int cot = 0;
    while (client.available()) {
     char c = client.read();
     Serial.write(c);
-    re += String(c);
+    //buf[cot++] = c;
   }
   
   if (!client.connected()) {
@@ -113,7 +124,12 @@ String http_post(String server, String api,int port, const String &content){
     Serial.println("Disconnecting from server...");
     client.stop();
   }
-  return re;
+ // int idx = 0;
+ // while(buf[idx++] != '{');
+  //idx--;
+  
+ // Serial.print(buf+idx);
+  //return String(buf+idx);
 }
 String http_get(String server, String api,int port){
   if (client.connect(server.c_str(), 80)) {
