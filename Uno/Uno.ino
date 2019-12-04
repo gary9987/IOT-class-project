@@ -15,7 +15,7 @@
 SoftwareSerial Serial1(6, 7); // RX, TX
 #endif
 
-
+const int buffer_size = 512;
 char ssid[] = "LoveE2";            // your network SSID (name)
 char pass[] = "gary0206";        // your network password
 int status = WL_IDLE_STATUS;     // the Wifi radio's status
@@ -58,41 +58,15 @@ void setup()
   Serial.println("Starting connection to server...");
 
   String re1 = http_get("httpbin.org", "/get", 80);
-   Serial.println("GARY\n" + re1);
+  Serial.println("GARY\n" + re1);
   //String re = http_post("httpbin.org", "/post", 80, "{\"JSON_key\": " + String(80) + "}");
-  
   //Serial.println(re);
-  /*
-  // if you get a connection, report back via serial
-  if (client.connect(server, 80)) {
-    Serial.println("Connected to server");
-    // Make a HTTP request
-    client.println("GET /asciilogo.txt HTTP/1.1");
-    client.println("Host: arduino.cc");
-    client.println("Connection: close");
-    client.println();
-  }
-  */
+
 }
 
 void loop()
 {
-  // if there are incoming bytes available
-  // from the server, read them and print them
-  while (client.available()) {
-    char c = client.read();
-    Serial.write(c);
-  }
 
-  // if the server's disconnected, stop the client
-  if (!client.connected()) {
-    Serial.println();
-    Serial.println("Disconnecting from server...");
-    client.stop();
-
-    // do nothing forevermore
-    while (true);
-  }
 }
 
 
@@ -150,11 +124,12 @@ String http_get(String server, String api,int port){
     client.println("Connection: close");
     client.println();
   }
-  String re = "";
-   while (client.available()) {
+  char buf[buffer_size] = "";
+  int cot = 0;
+   while (client.available() && cot < buffer_size) {
     char c = client.read();
-    //Serial.write(c);
-    re += String(c);
+    Serial.write(c);
+    buf[cot++] = c;
   }
   
   if (!client.connected()) {
@@ -162,5 +137,10 @@ String http_get(String server, String api,int port){
     Serial.println("Disconnecting from server...");
     client.stop();
   }
-  return re;
+  int idx = 0;
+  while(buf[idx++] != '{');
+  idx--;
+  
+  Serial.print(buf+idx);
+  return String(buf+idx);
 }
