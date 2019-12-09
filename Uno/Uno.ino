@@ -7,6 +7,8 @@
  For more details see: http://yaab-arduino.blogspot.com/p/wifiesp-example-client.html
 */
 
+#define _ESPLOGLEVEL_ 4
+
 #include "WiFiEsp.h"
 
 // Emulate Serial1 on pins 6/7 if not present
@@ -15,12 +17,12 @@
 SoftwareSerial Serial1(6, 7); // RX, TX
 #endif
 
+
 const int buffer_size = 512;
 char ssid[] = "LoveE2";            // your network SSID (name)
 char pass[] = "gary0206";        // your network password
 int status = WL_IDLE_STATUS;     // the Wifi radio's status
 
-char server[] = "arduino.cc";
 
 // Initialize the Ethernet client object
 WiFiEspClient client;
@@ -53,29 +55,17 @@ void setup()
   Serial.println("You're connected to the network");
   printWifiStatus();
 
-  //String re1 = http_get("httpbin.org", "/get", 80);
-  //Serial.println(re1);
-  String re = http_post("httpbin.org", "/post", "{\"JSON_key\": 22}");
-  //Serial.println(re);
+  
 
 }
 
 void loop()
 {
-  while (client.available()) {
-    char c = client.read();
-    Serial.write(c);
-  }
+  //String re1 = http_get("140.122.184.8", "/timestamp", 55688);
+  //Serial.println(re1);
 
-  // if the server's disconnected, stop the client
-  if (!client.connected()) {
-    Serial.println();
-    Serial.println("Disconnecting from server...");
-    client.stop();
-
-    // do nothing forevermore
-    while (true);
-  }
+  String re = http_post("140.122.184.8", "/deviceData/timeQuery", 55688, "{\"deviceId\": 0,\"fromTimestamp\": 0,\"toTimestamp\": 0}");
+  Serial.println(re);
 }
 
 
@@ -96,27 +86,26 @@ void printWifiStatus()
   Serial.print(rssi);
   Serial.println(" dBm");
 }
-String http_post(String server, String api, const String &content){
+String http_post(String server, String api, int port, const String &content){
   client.stop();
-  int value = 2.5;  // an arbitrary value for testing
-  String d = "{\"JSON_key\": " + String(value) + "}";
-  if (client.connect("httpbin.org", 80)) {
+  if (client.connect(server.c_str(), port)) {
     Serial.println("Connected to server");
-    client.println("POST /post HTTP/1.1");
-    client.println("Host: httpbin.org");
+    client.println("POST " + api + " HTTP/1.1");
+    client.println("Connection: keep-alive");
+    client.println("Host: " + server );
     client.println("Accept: */*");
-    //client.println("Content-Length: " + d.length());
-    client.println("Content-Type: application/x-www-form-urlencoded");
+    client.println("Content-Length: " + String(content.length()));
+    client.println("Content-Type: application/json");
     client.println();
-    //client.println(d);
+    client.println(content);
+    
   }
-  
-  //char buf[buffer_size] = "";
+  char buf[buffer_size] = "";
   int cot = 0;
    while (client.available()) {
     char c = client.read();
-    Serial.write(c);
-    //buf[cot++] = c;
+    //Serial.write(c);
+    buf[cot++] = c;
   }
   
   if (!client.connected()) {
@@ -124,15 +113,21 @@ String http_post(String server, String api, const String &content){
     Serial.println("Disconnecting from server...");
     client.stop();
   }
- // int idx = 0;
- // while(buf[idx++] != '{');
-  //idx--;
-  
- // Serial.print(buf+idx);
-  //return String(buf+idx);
+  int idx = 0, idx2 = 0;
+  while(buf[idx++] != '{');
+  idx2 = buffer_size - 1;
+  while(buf[idx2--] != '}');
+  idx--;
+  idx2++;
+  String re;
+  for(int i=idx; i<=idx2; i++){
+    re += String(buf[i]);
+  }
+  return re;
 }
 String http_get(String server, String api,int port){
-  if (client.connect(server.c_str(), 80)) {
+  client.stop();
+  if (client.connect(server.c_str(), port)) {
     Serial.println("Connected to server");
     // Make a HTTP request
     client.println("GET " + api + " HTTP/1.1");
@@ -144,19 +139,27 @@ String http_get(String server, String api,int port){
   int cot = 0;
    while (client.available() && cot < buffer_size) {
     char c = client.read();
-    Serial.write(c);
+    //Serial.write(c);
     buf[cot++] = c;
   }
+  buf[cot] = '\0';
+  //Serial.println(buf);
   
   if (!client.connected()) {
     Serial.println();
     Serial.println("Disconnecting from server...");
     client.stop();
   }
-  int idx = 0;
+  int idx = 0, idx2 = 0;
   while(buf[idx++] != '{');
+  idx2 = buffer_size - 1;
+  while(buf[idx2--] != '}');
   idx--;
-  
-  Serial.print(buf+idx);
-  return String(buf+idx);
+  idx2++;
+  String re;
+  for(int i=idx; i<=idx2; i++){
+    re += String(buf[i]);
+  }
+  //Serial.write(re.c_str());
+  return re;
 }
