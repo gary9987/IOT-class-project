@@ -1,3 +1,4 @@
+
 /**
    BasicHTTPClient.ino
 
@@ -11,12 +12,19 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <SoftwareSerial.h>
-
+// For DS18B20
+#include <DallasTemperature.h>
+#include <OneWire.h>
+// End
 #include <ESP8266HTTPClient.h>
 
 #include <WiFiClient.h>
 
 ESP8266WiFiMulti WiFiMulti;
+
+#define DQ_pin D4
+OneWire oneWire(DQ_pin);
+DallasTemperature WTsensors(&oneWire);
 
 //SoftwareSerial bt(D5, D6);
 
@@ -147,6 +155,8 @@ void loop()
   Serial.println(getTds());
   Serial.println(getWaterLevel());
   Serial.println(analogRead(A0) );
+  WTsensors.requestTemperatures();
+  Serial.println(WTsensors.getTempCByIndex(0));
   delay(1000);
   //http_get(WiFiMulti, "http://httpbin.org/get");
   //http_post(WiFiMulti, "http://httpbin.org/post", "{}");
