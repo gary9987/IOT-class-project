@@ -1,13 +1,7 @@
 
-/**
-   BasicHTTPClient.ino
-
-    Created on: 24.05.2015
-
-*/
-
 #include <Arduino.h>
 #include <Adafruit_ADS1015.h>
+#include <ArduinoJson.h>
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
@@ -17,29 +11,33 @@
 #include <OneWire.h>
 // End
 #include <ESP8266HTTPClient.h>
-
 #include <WiFiClient.h>
 
 ESP8266WiFiMulti WiFiMulti;
 
-#define DQ_pin D4
-OneWire oneWire(DQ_pin);
-DallasTemperature WTsensors(&oneWire);
 
-//SoftwareSerial bt(D5, D6);
-
-Adafruit_ADS1115 ads(0x48);
-
-
+#define WaterT_pin D4
 #define TDS_APIN 0
 #define WaterLevel_APIN 1
 #define VREF 3.0 // analog reference voltage(Volt) of the ADC
 #define SCOUNT 30 // sum of sample point
+
 int analogBuffer[SCOUNT]; // store the analog value in the array, read from ADC
 int analogBufferTemp[SCOUNT];
 int analogBufferIndex = 0,copyIndex = 0;
-float averageVoltage = 0,tdsValue = 0,temperature = 25;
+float averageVoltage = 0,tdsValue = 0; //,temperature = 25;
 
+
+OneWire oneWire(WaterT_pin);
+DallasTemperature WTsensors(&oneWire);
+
+//SoftwareSerial bt(D5, D6);
+Adafruit_ADS1115 ads(0x48);
+
+float getWaterTemperature(){
+  WTsensors.requestTemperatures();
+  return WTsensors.getTempCByIndex(0);
+}
 
 int getWaterLevel()
 {
@@ -66,7 +64,7 @@ int getTds()
             for(copyIndex=0; copyIndex<SCOUNT; copyIndex++)
                 analogBufferTemp[copyIndex]= analogBuffer[copyIndex];
             averageVoltage = getMedianNum(analogBufferTemp,SCOUNT) * (float)VREF / 1024.0; // read the analog value more stable by the median filtering algorithm, and convert to voltage value
-            float compensationCoefficient=1.0+0.02*(temperature-25.0); //temperature compensation formula: fFinalResult(25^C) = fFinalResult(current)/(1.0+0.02*(fTP-25.0));
+            float compensationCoefficient=1.0+0.02*(getWaterTemperature()-25.0); //temperature compensation formula: fFinalResult(25^C) = fFinalResult(current)/(1.0+0.02*(fTP-25.0));
             float compensationVolatge=averageVoltage/compensationCoefficient; //temperature compensation
             tdsValue=(133.42*compensationVolatge*compensationVolatge*compensationVolatge - 255.86*compensationVolatge*compensationVolatge + 857.39*compensationVolatge)*0.5; //convert voltage value to tds value
             return tdsValue;
@@ -118,9 +116,8 @@ void setup()
 
 void loop()
 {
+  /*
   // wait for WiFi connection
-  Serial.println("test");
-  
   int16_t adc0, adc1, adc2, adc3;
   float voltage0, voltage1, voltage2, voltage3;
    
@@ -150,16 +147,40 @@ void loop()
   Serial.print("VIN3: ");
   Serial.println(voltage3);
   Serial.println(" ");
+  */
 
 
   Serial.println(getTds());
   Serial.println(getWaterLevel());
-  Serial.println(analogRead(A0) );
-  WTsensors.requestTemperatures();
-  Serial.println(WTsensors.getTempCByIndex(0));
+  Serial.println(getWaterTemperature());
+  /*
+  String response = http_get(WiFiMulti, "http://140.122.184.8:55688/timestamp");
+  DynamicJsonDocument doc(1024);
+  deserializeJson(doc, response);
+  long time = doc["timestamp"];
+  Serial.println(time);
+  */
+  /*
+  {
+  "deviceId": 0,
+  "tdsRawData": "string",
+  "timestamp": "string",
+  "waterLevel": "string",
+  "waterTemperature": "string"
+  }*/
+  DynamicJsonDocument doc(1024);
+  doc["deviceId"] = 0;
+  doc["tdsRawData"] = getTds();
+  doc["timestamp"] = 0;
+  doc["waterLevel"] = getWaterLevel();
+  doc["waterTemperature"] = getWaterTemperature();
+  String inputstr;
+  serializeJson(doc, inputstr);
+  Serial.println(inputstr);
+
+  Serial.println(http_post(WiFiMulti, "http://140.122.184.8:55688/deviceData/input", inputstr));
+  
   delay(1000);
-  //http_get(WiFiMulti, "http://httpbin.org/get");
-  //http_post(WiFiMulti, "http://httpbin.org/post", "{}");
 }
 
 int getMedianNum(int bArray[], int iFilterLen)
@@ -210,6 +231,7 @@ String http_get(ESP8266WiFiMulti &WiFiMulti, const String &url)
         {
           String payload = http.getString();
           Serial.println(payload);
+          return payload;
         }
       }
       else
@@ -236,6 +258,7 @@ String http_post(ESP8266WiFiMulti &WiFiMulti, const String &url, const String &d
     { // HTTP
       Serial.print("[HTTP] POST...\n");
       // start connection and send HTTP header
+      http.addHeader("Content-Type", "application/json");
       int httpCode = http.POST(data);
       // httpCode will be negative on error
       if (httpCode > 0)
@@ -248,6 +271,7 @@ String http_post(ESP8266WiFiMulti &WiFiMulti, const String &url, const String &d
         {
           String payload = http.getString();
           Serial.println(payload);
+          return payload;
         }
       }
       else
