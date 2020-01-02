@@ -19,6 +19,7 @@ ESP8266WiFiMulti WiFiMulti;
 #define WaterT_pin D4
 #define TDS_APIN 0
 #define WaterLevel_APIN 1
+
 #define VREF 3.0 // analog reference voltage(Volt) of the ADC
 #define SCOUNT 30 // sum of sample point
 
@@ -33,44 +34,6 @@ DallasTemperature WTsensors(&oneWire);
 
 //SoftwareSerial bt(D5, D6);
 Adafruit_ADS1115 ads(0x48);
-
-float getWaterTemperature(){
-  WTsensors.requestTemperatures();
-  return WTsensors.getTempCByIndex(0);
-}
-
-int getWaterLevel()
-{
-    return ads.readADC_SingleEnded(WaterLevel_APIN)*0.0001875*1023/3;
-}
-
-int getTds()
-{
-    while(1)
-    {
-        static unsigned long analogSampleTimepoint = millis();
-        if(millis()-analogSampleTimepoint > 40U) //every 40 milliseconds,read the analog value from the ADC
-        {
-            analogSampleTimepoint = millis();
-            analogBuffer[analogBufferIndex] = ads.readADC_SingleEnded(TDS_APIN)*0.0001875*1023/3; //read the analog value and store into the buffer
-            analogBufferIndex++;
-            if(analogBufferIndex == SCOUNT)
-                analogBufferIndex = 0;
-        }
-        static unsigned long printTimepoint = millis();
-        if(millis()-printTimepoint > 800U)
-        {
-            printTimepoint = millis();
-            for(copyIndex=0; copyIndex<SCOUNT; copyIndex++)
-                analogBufferTemp[copyIndex]= analogBuffer[copyIndex];
-            averageVoltage = getMedianNum(analogBufferTemp,SCOUNT) * (float)VREF / 1024.0; // read the analog value more stable by the median filtering algorithm, and convert to voltage value
-            float compensationCoefficient=1.0+0.02*(getWaterTemperature()-25.0); //temperature compensation formula: fFinalResult(25^C) = fFinalResult(current)/(1.0+0.02*(fTP-25.0));
-            float compensationVolatge=averageVoltage/compensationCoefficient; //temperature compensation
-            tdsValue=(133.42*compensationVolatge*compensationVolatge*compensationVolatge - 255.86*compensationVolatge*compensationVolatge + 857.39*compensationVolatge)*0.5; //convert voltage value to tds value
-            return tdsValue;
-        }
-    }
-}
 
 
 void setup()
@@ -148,32 +111,23 @@ void loop()
   Serial.println(voltage3);
   Serial.println(" ");
   */
+  String timestamp = getTimestamp();
+  int tds = getTds();
+  int waterlevel = getWaterLevel();
+  float temperature = getWaterTemperature();
+  
+  Serial.println( "Timestamp: " + timestamp);
+  Serial.println( "Water TDS: " + String(tds));
+  Serial.println( "Water Level: " + String(waterlevel));
+  Serial.println( "Water Temperature: " + String(temperature));
 
 
-  Serial.println(getTds());
-  Serial.println(getWaterLevel());
-  Serial.println(getWaterTemperature());
-  /*
-  String response = http_get(WiFiMulti, "http://140.122.184.8:55688/timestamp");
-  DynamicJsonDocument doc(1024);
-  deserializeJson(doc, response);
-  long time = doc["timestamp"];
-  Serial.println(time);
-  */
-  /*
-  {
-  "deviceId": 0,
-  "tdsRawData": "string",
-  "timestamp": "string",
-  "waterLevel": "string",
-  "waterTemperature": "string"
-  }*/
   DynamicJsonDocument doc(1024);
   doc["deviceId"] = 0;
   doc["tdsRawData"] = getTds();
-  doc["timestamp"] = 0;
-  doc["waterLevel"] = getWaterLevel();
-  doc["waterTemperature"] = getWaterTemperature();
+  doc["timestamp"] = timestamp;
+  doc["waterLevel"] = waterlevel;
+  doc["waterTemperature"] = temperature;
   String inputstr;
   serializeJson(doc, inputstr);
   Serial.println(inputstr);
@@ -182,6 +136,54 @@ void loop()
   
   delay(1000);
 }
+
+
+String getTimestamp(){
+    String response = http_get(WiFiMulti, "http://140.122.184.8:55688/timestamp");
+    String re = "0000000000000";
+    for(int i=0; i< 13; i++){
+      re[i] = response[i+13];
+    }
+    return re;
+}
+float getWaterTemperature(){
+  WTsensors.requestTemperatures();
+  return WTsensors.getTempCByIndex(0);
+}
+
+int getWaterLevel()
+{
+    return ads.readADC_SingleEnded(WaterLevel_APIN)*0.0001875*1023/3;
+}
+
+int getTds()
+{
+    while(1)
+    {
+        static unsigned long analogSampleTimepoint = millis();
+        if(millis()-analogSampleTimepoint > 40U) //every 40 milliseconds,read the analog value from the ADC
+        {
+            analogSampleTimepoint = millis();
+            analogBuffer[analogBufferIndex] = ads.readADC_SingleEnded(TDS_APIN)*0.0001875*1023/3; //read the analog value and store into the buffer
+            analogBufferIndex++;
+            if(analogBufferIndex == SCOUNT)
+                analogBufferIndex = 0;
+        }
+        static unsigned long printTimepoint = millis();
+        if(millis()-printTimepoint > 800U)
+        {
+            printTimepoint = millis();
+            for(copyIndex=0; copyIndex<SCOUNT; copyIndex++)
+                analogBufferTemp[copyIndex]= analogBuffer[copyIndex];
+            averageVoltage = getMedianNum(analogBufferTemp,SCOUNT) * (float)VREF / 1024.0; // read the analog value more stable by the median filtering algorithm, and convert to voltage value
+            float compensationCoefficient=1.0+0.02*(getWaterTemperature()-25.0); //temperature compensation formula: fFinalResult(25^C) = fFinalResult(current)/(1.0+0.02*(fTP-25.0));
+            float compensationVolatge=averageVoltage/compensationCoefficient; //temperature compensation
+            tdsValue=(133.42*compensationVolatge*compensationVolatge*compensationVolatge - 255.86*compensationVolatge*compensationVolatge + 857.39*compensationVolatge)*0.5; //convert voltage value to tds value
+            return tdsValue;
+        }
+    }
+}
+
 
 int getMedianNum(int bArray[], int iFilterLen)
 {
